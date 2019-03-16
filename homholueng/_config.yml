@@ -78,7 +78,7 @@ theme: indigo
 ## Docs: https://hexo.io/docs/deployment.html
 deploy:
   type: git
-  repo: git@github.com:homholueng/blog.git
+  repo: git@github.com:homholueng/homholueng.github.io.git
   branch: master
   name: homholueng
   email: homholueng@gmail.com
