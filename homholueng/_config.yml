@@ -80,5 +80,7 @@ deploy:
   type: git
   repo: https://github.com/homholueng/homholueng.github.io.git
   branch: master
+  name: homholueng
+  email: homholueng@gmail.com
 
 reward: false
