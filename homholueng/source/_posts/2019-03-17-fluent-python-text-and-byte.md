@@ -1,5 +1,5 @@
 ---
-title: Chapter 4. 文本和字节序列
+title: Chapter 4 - 文本和字节序列
 tags:
   - Python
 categories:
