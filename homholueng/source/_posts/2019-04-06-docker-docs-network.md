@@ -1,7 +1,13 @@
 ---
-title: docker_docs_network
+title: Docker 网络基础
 tags:
+  - Docker
+  - Network
+categories:
+  - Docker
+date: 2019-04-06 18:17:19
 ---
+
 
 Docker 容器和服务的功能之所以如此强大，得益于其能够通过网络与其他组件进行互联。与此同时，容器和服务也不需要关心自身和与其互联的组件是否是部署在 Docker 上的，也不需要关心 Docker 宿主机的操作系统类型，因为 Docker 已经帮我们处理了这些事情，我们能够使用一种平台无关的方式来管理这些组件和配置。
 
@@ -403,3 +409,46 @@ PING 172.17.0.2 (172.17.0.2): 56 data bytes
 round-trip min/avg/max = 0.152/0.183/0.215 ms
 ```
 
+## 使用 host 网络
+
+如果某个容器使用的是 host 网络，那么该容器的网络栈是不会与 Docker 宿主机进行隔离的。举个例子，如果某个容器使用 host 网络并绑定了 80 端口，那么该绑定该端口的应用将能够在宿主机 IP 的 80 端口上访问到。
+
+**要注意的是，host 类型的驱动只在 Linux 宿主机下起作用。**
+
+
+### host 网络实践
+
+本次实践会运行一个 `nginx` 容器，并将其直接绑定到宿主机的 80 端口上。从网络的层次上看，容器与宿主机的隔离程度和直接在宿主机上运行 `nginx` 进程是一样的。但是从存储，进程命名空间和用户命名空间上看，`nginx` 进程与宿主机是完全隔离的。
+
+1. 启动 `nginx` 容器（`--rm` 选项会移除已有的容器）
+
+```shell
+$ docker run --rm -d --network host --name my_nginx nginx
+```
+
+2. 访问 http://localhost:80/
+
+## 使用 overlay 网络
+
+overlay 网络驱动会在多个 Docker 宿主机之间建立一个分布式网络。该网络位于 host 网络之上，所以被称为 overlay 网络，容器能够加入到该网络中，并与该网络中的其他容器安全地进行通讯。
+
+当你初始化一个 swarm 节点并将其加入一个已经存在的 swarm 中时，该节点的宿主机上会创建两个新的网络：
+
+- 一个名为 `ingress` 的 overlay 网络，负责处理 swarm service 之间的通信数据。当你创建的 swarm service 没有加入自定义的 overlay 网络中时，其默认会加入 `ingress` 中。
+- 一个名为 `docekr_gwbridge` 的 bridge 网络，其负责将 swarm 中的 Docker 进程连接起来。
+
+通过 `docker network create` 命令能够创建自定义的 overlay 网络，这与创建自定义的 bridge 网络相似。一个 swarm service 或容器能够同时加入多个网络中。
+
+
+## 使用 macvlan 网络
+
+macvlan 网络能够为容器分配一个 MAC 地址，使得容器看起来就像是物理网络中的一台真实物理设备一样。但是，这需要为 macvlan 网络分配一个 Docker 宿主机上的物理网络接口，该接口会用于该网络及其子网和网关。你甚至能够使用不同的物理接口来对不同的 macvlan 网络进行隔离，但是在使用 macvlan 网络前，必须要明确以下几点：
+
+- 很可能会因为 IP 地址耗尽或是 VLAN spread 而无意中损坏你的网络。
+- 你的网络设备需要能够处理混杂模式，即在一个物理接口上分配多个 MAC 地址。
+- 如果你的应用在 bridge 网络或是 overlay 网络上也能够正常工作，那么从长远来看这些都是更好的解决方案。
+
+macvlan 网络存在两种模式：bridge 模式和 802.1q trun bridge 模式，这两种模式的差异如下：
+
+- 在 bridge 模式下，macvlan 网络的流量会直接经过宿主机上的网络接口。
+- 在 802.1q trun bridge 模式下，网络流量会经过一个 Docker 创建的 802.1q 子接口。这个模式允许我们更加精细对流量进行路由和过滤。
