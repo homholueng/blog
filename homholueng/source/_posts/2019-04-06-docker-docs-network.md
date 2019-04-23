@@ -17,7 +17,7 @@ Docker 的网络系统通过驱动来实现了可插拔的特性，并且默认�
 
 - `bridge`：默认使用的驱动类型，**一般独立的容器需要进行网络通信时都会使用这种驱动**。
 - `host`：对于独立容器来说，host 驱动去除了 Docker 宿主机与容器之间的网络隔离，直接使用宿主机网络。该模式仅仅对 17.06 之后的版本中的 swarm services 有效。
-- `overlay`：overlay 驱动将多个 Docker 连接起来使得 swarm services 之间能够进行互相通信。同时，你也可以使用 overlay 网络来让 swarm services 与独立容器、或是运行在不同的 Docker 上的进程独立容器与独立容器之间进行网络通信。
+- `overlay`：overlay 驱动将多个 Docker 连接起来使得 swarm services 之间能够进行互相通信。同时，你也可以使用 overlay 网络来让 swarm services 与独立容器、或是运行在不同的 Docker 进程上的独立容器与独立容器之间进行网络通信。
 - `macvlan`：macvlan 驱动能够为容器设置 MAC 地址，使其在网络中表现的与真实的物理设备一样。当你要处理一些需要直连物理网络的遗留应用时，macvlan 或许是比较好的选择。
 - `none`：使用的这种插件的容器将无法进行网络通信，swarm services 无法使用这种类型的插件。
 
@@ -340,7 +340,7 @@ $ docker network inspect bridge
 ]
 ```
 
-5. 子啊用户定义的网络中，容器时间不仅能够根据彼此的 IP 地址进行通信，还能够根据容器名来进行通信，这个特性被称为**服务发现**，进入 `alpine1` 容器中，并尝试使用容器名与其他容器进行通信，由于 `alpine1` 与 `alpine3` 不在同一个网络中，所以不管通过容器名还是 IP 地址都无法与其进行通信
+5. 在用户定义的网络中，容器之间不仅能够根据彼此的 IP 地址进行通信，还能够根据容器名来进行通信，这个特性被称为**服务发现**，进入 `alpine1` 容器中，并尝试使用容器名与其他容器进行通信，由于 `alpine1` 与 `alpine3` 不在同一个网络中，所以不管通过容器名还是 IP 地址都无法与其进行通信
 
 ```shell
 $ docker container attach alpine1
@@ -430,7 +430,7 @@ $ docker run --rm -d --network host --name my_nginx nginx
 
 ## 使用 overlay 网络
 
-overlay 网络驱动会在多个 Docker 宿主机之间建立一个分布式网络。该网络位于 host 网络之上，所以被称为 overlay 网络，容器能够加入到该网络中，并与该网络中的其他容器安全地进行通讯。
+overlay 网络驱动会在多个 Docker 宿主机之间建立一个分布式网络。该网络位于宿主机的网络之上，所以被称为 overlay 网络，容器能够加入到该网络中，并与该网络中的其他容器安全地进行通讯。
 
 当你初始化一个 swarm 节点并将其加入一个已经存在的 swarm 中时，该节点的宿主机上会创建两个新的网络：
 
