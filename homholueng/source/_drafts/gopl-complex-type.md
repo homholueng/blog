@@ -120,7 +120,7 @@ fmt.Printf("%q\n", runes) // "['H' 'e' 'l' 'l' 'o' ',' ' ' '世' '界']"
 
 内置的 copy 函数可以方便地将一个 slice 复制另一个相同类型的 slice，`copy` 函数的第一个参数是要复制的目标 slice，第二个参数是源 slice，目标和源的位置顺序和 `dst = src` 赋值语句是一致的。
 
-我们并不知道 `append` 调用是否导致了内存的重新分配，因此我们也不能确认新的 slice 和原始的 slice 是否引用的是相同的底层数组空间。同样，我们不能确认在原先的 slice 上的操作是否会影响到新的 slice。因此，通常是将 append 返回的结果直接赋值给输入的 slice 变量：
+**我们并不知道 `append` 调用是否导致了内存的重新分配，因此我们也不能确认新的 slice 和原始的 slice 是否引用的是相同的底层数组空间。同样，我们不能确认在原先的 slice 上的操作是否会影响到新的 slice。** 因此，通常是将 append 返回的结果直接赋值给输入的 slice 变量：
 
 ```go
 runes = append(runes, r)
@@ -170,4 +170,101 @@ fmt.Printf("%q\n", data)           // `["one" "three" "three"]`
 ```
 
 因此我们通常会这样使用 `nonempty` 函数：`data = nonempty(data)`。
+
+## 4.3. Map
+
+在 Go 语言中，一个 map 就是一个哈希表的引用，map 类型可以写为 `map[K]V`，其中 `K` 和 `V` 分别对应 key 和 value。
+
+内置的 make 函数可以创建一个 map：
+
+```go
+ages := make(map[string]int) // mapping from strings to ints
+```
+
+我们也可以用 map 字面值的语法创建 map，同时还可以指定一些最初的 key/value：
+
+```go
+ages := map[string]int{
+    "alice":   31,
+    "charlie": 34,
+}
+```
+
+使用内置的 `delete` 函数可以删除元素：
+
+```go
+delete(ages, "alice") // remove element ages["alice"]
+```
+
+**在 go 的 map 上，如果一个查找失败将返回 value 类型对应的零值。**
+
+但是 map 中的元素并不是一个变量，因此我们不能对 map 的元素进行取址操作：
+
+```go
+_ = &ages["bob"] // compile error: cannot take address of map element
+```
+
+禁止对 map 元素取址的原因是 map 可能随着元素数量的增长而重新分配更大的内存空间，从而可能导致之前的地址无效。
+
+要想遍历 map 中全部的 key/value 对的话，可以使用 range 风格的 for 循环实现，和之前的 slice 遍历语法类似。下面的迭代语句将在每次迭代时设置 name 和 age 变量，它们对应下一个键 / 值对：
+
+```go
+for name, age := range ages {
+    fmt.Printf("%s\t%d\n", name, age)
+}
+```
+
+如果要按顺序遍历 key/value 对，我们必须显式地对 key 进行排序，可以使用 sort 包的 Strings 函数对字符串 slice 进行排序。下面是常见的处理方式：
+
+```go
+import "sort"
+
+var names []string
+for name := range ages {
+    names = append(names, name)
+}
+sort.Strings(names)
+for _, name := range names {
+    fmt.Printf("%s\t%d\n", name, ages[name])
+}
+```
+
+因为我们一开始就知道 names 的最终大小，因此给 slice 分配一个合适的大小将会更有效。下面的代码创建了一个空的 slice，但是 slice 的容量刚好可以放下 map 中全部的 key：
+
+```go
+names := make([]string, 0, len(ages)) // type, len, cap
+```
+
+map 类型的零值是 `nil`，也就是没有引用任何哈希表。
+
+```go
+var ages map[string]int
+fmt.Println(ages == nil)    // "true"
+fmt.Println(len(ages) == 0) // "true"
+```
+
+map 上的大部分操作，包括查找、删除、`len` 和 `range` 循环都可以安全工作在 `nil` 值的 map 上，它们的行为和一个空的 map 类似。但是向一个 `nil` 值的 map 存入元素将导致一个 panic 异常：
+
+```go
+ages["carol"] = 21 // panic: assignment to entry in nil map
+```
+
+如果我们需要确认 map 取值返回的究竟是不存在的零值还是存在的零值，可以使用如下的方式：
+
+```go
+age, ok := ages["bob"]
+if !ok { /* "bob" is not a key in this map; age == 0. */ }
+
+// or
+
+if age, ok := ages["bob"]; !ok { /* ... */ }
+```
+
+和 slice 一样，map 之间也不能进行相等比较；唯一的例外是和 `nil` 进行比较。要判断两个 map 是否包含相同的 key 和 value，我们必须通过一个循环实现。
+
+Go 语言中并没有提供一个 set 类型，但是 map 中的 key 也是不相同的，可以用 map 实现类似 set 的功能。
+
+有时候我们需要一个 map 或 set 的 key 是 slice 类型，但是 map 的 key 必须是可比较的类型，但是 slice 并不满足这个条件。不过，我们可以通过两个步骤绕过这个限制。第一步，定义一个辅助函数 `k`，将 slice 转为 map 对应的 string 类型的 key，确保只有 `x` 和 `y` 相等时 `k (x) == k (y)` 才成立。然后创建一个 key 为 string 类型的 map，在每次对 map 操作时先用 `k` 辅助函数将 slice 转化为 string 类型。
+
+## 4.4. 结构体
 
