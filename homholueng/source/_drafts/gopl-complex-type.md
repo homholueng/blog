@@ -268,3 +268,192 @@ Go 语言中并没有提供一个 set 类型，但是 map 中的 key 也是不�
 
 ## 4.4. 结构体
 
+结构体是一种聚合的数据类型，是由零个或多个任意类型的值聚合成的实体。
+
+下面两个语句声明了一个叫 Employee 的命名的结构体类型，并且声明了一个 Employee 类型的变量 `dilbert`：
+
+```go
+type Employee struct {
+    ID        int
+    Name      string
+    Address   string
+    DoB       time.Time
+    Position  string
+    Salary    int
+    ManagerID int
+}
+
+var dilbert Employee
+```
+
+`dilbert` 结构体变量的成员可以通过点操作符访问，比如 `dilbert.Name` 和 `dilbert.DoB`。
+
+点操作符也可以和指向结构体的指针一起工作：
+
+```go
+var employeeOfTheMonth *Employee = &dilbert
+employeeOfTheMonth.Position += " (proactive team player)"
+```
+
+相当于下面语句
+
+```go
+(*employeeOfTheMonth).Position += " (proactive team player)"
+```
+
+下面的 `EmployeeByID` 函数将根据给定的员工 ID 返回对应的员工信息结构体的指针。我们可以使用点操作符来访问它里面的成员：
+
+```go
+func EmployeeByID(id int) *Employee { /* ... */ }
+
+fmt.Println(EmployeeByID(dilbert.ManagerID).Position) // "Pointy-haired boss"
+
+id := dilbert.ID
+EmployeeByID(id).Salary = 0 // fired for... no real reason
+```
+
+后面的语句通过 `EmployeeByID` 返回的结构体指针更新了 `Employee` 结构体的成员。如果将 `EmployeeByID` 函数的返回值从 `*Employee` 指针类型改为 `Employee` 值类型，那么更新语句将不能编译通过，因为在赋值语句的左边并不确定是一个变量（译注：调用函数返回的是值，并不是一个可取地址的变量）。
+
+通常一行对应一个结构体成员，成员的名字在前类型在后，不过如果相邻的成员类型如果相同的话可以被合并到一行，就像下面的 Name 和 Address 成员那样：
+
+```go
+type Employee struct {
+    ID            int
+    Name, Address string
+    DoB           time.Time
+    Position      string
+    Salary        int
+    ManagerID     int
+}
+```
+
+**如果结构体成员名字是以大写字母开头的，那么该成员就是导出的；这是 Go 语言导出规则决定的。一个结构体可能同时包含导出和未导出的成员。**
+
+结构体类型的零值是每个成员都是零值。通常会将零值作为最合理的默认值。
+
+如果结构体没有任何成员的话就是空结构体，写作 `struct{}`。它的大小为 0，也不包含任何信息，但是有时候依然是有价值的。有些 Go 语言程序员用 map 来模拟 set 数据结构时，用它来代替 map 中布尔类型的 value，只是强调 key 的重要性，但是因为节约的空间有限，而且语法比较复杂，所以我们通常会避免这样的用法。
+
+```go
+seen := make(map[string]struct{}) // set of strings
+// ...
+if _, ok := seen[s]; !ok {
+    seen[s] = struct{}{}
+    // ...first time seeing s...
+}
+```
+
+### 4.4.1. 结构体字面值
+
+结构体值也可以用结构体字面值表示，结构体字面值可以指定每个成员的值。
+
+
+```go
+type Point struct{ X, Y int }
+
+p := Point{1, 2}
+```
+
+这里有两种形式的结构体字面值语法，上面的是第一种写法，要求以结构体成员定义的顺序为每个结构体成员指定一个字面值。它要求写代码和读代码的人要记住结构体的每个成员的类型和顺序，不过结构体成员有细微的调整就可能导致上述代码不能编译。
+
+其实更常用的是第二种写法，以成员名字和相应的值来初始化：
+
+```go
+p := Point{X: 1, Y: 2}
+```
+
+在这种形式的结构体字面值写法中，如果成员被忽略的话将默认用零值。另外，需要注意的是，两种不同形式的写法不能混合使用。
+
+因为结构体通常通过指针处理，可以用下面的写法来创建并初始化一个结构体变量，并返回结构体的地址：
+
+```go
+pp := &Point{1, 2}
+```
+
+它和下面的语句是等价的
+
+```go
+pp := new(Point)
+*pp = Point{1, 2}
+```
+
+不过 `&Point{1, 2}` 写法可以直接在表达式中使用，比如一个函数调用。
+
+### 4.4.2. 结构体比较
+
+如果结构体的全部成员都是可以比较的，那么结构体也是可以比较的，那样的话两个结构体将可以使用 `==` 或 `=` 运算符进行比较。
+
+可比较的结构体类型和其他可比较的类型一样，可以用于 map 的 key 类型。
+
+### 4.4.3. 结构体嵌入和匿名成员
+
+Go 语言有一个特性让我们只声明一个成员对应的数据类型而不指名成员的名字；这类成员就叫匿名成员。匿名成员的数据类型必须是命名的类型或指向一个命名的类型的指针。下面的代码中，Circle 和 Wheel 各自都有一个匿名成员。我们可以说 Point 类型被嵌入到了 Circle 结构体，同时 Circle 类型被嵌入到了 Wheel 结构体。
+
+```go
+type Circle struct {
+    Point
+    Radius int
+}
+
+type Wheel struct {
+    Circle
+    Spokes int
+}
+```
+
+得益于匿名嵌入的特性，我们可以直接访问叶子属性而不需要给出完整的路径：
+
+```go
+var w Wheel
+w.X = 8            // equivalent to w.Circle.Point.X = 8
+w.Y = 8            // equivalent to w.Circle.Point.Y = 8
+w.Radius = 5       // equivalent to w.Circle.Radius = 5
+w.Spokes = 20
+```
+
+其中匿名成员 Circle 和 Point 都有自己的名字 —— 就是命名的类型名字 —— 但是这些名字在点操作符中是可选的。我们在访问子成员的时候可以忽略任何匿名成员部分。
+
+不幸的是，结构体字面值并没有简短表示匿名成员的语法， 因此下面的语句都不能编译通过：
+
+```go
+w = Wheel{8, 8, 5, 20}                       // compile error: unknown fields
+w = Wheel{X: 8, Y: 8, Radius: 5, Spokes: 20} // compile error: unknown fields
+```
+
+结构体字面值必须遵循形状类型声明时的结构，所以我们只能用下面的两种语法，它们彼此是等价的：
+
+```go
+w = Wheel{Circle{Point{8, 8}, 5}, 20}
+
+w = Wheel{
+    Circle: Circle{
+        Point:  Point{X: 8, Y: 8},
+        Radius: 5,
+    },
+    Spokes: 20, // NOTE: trailing comma necessary here (and at Radius)
+}
+
+fmt.Printf("%#v\n", w)
+// Output:
+// Wheel{Circle:Circle{Point:Point{X:8, Y:8}, Radius:5}, Spokes:20}
+
+w.X = 42
+
+fmt.Printf("%#v\n", w)
+// Output:
+// Wheel{Circle:Circle{Point:Point{X:42, Y:8}, Radius:5}, Spokes:20}
+```
+
+*需要注意的是 `Printf` 函数中 `%v` 参数包含的 `#` 副词，它表示用和 Go 语言类似的语法打印值。对于结构体类型来说，将包含每个成员的名字。*
+
+**因为匿名成员也有一个隐式的名字，因此不能同时包含两个类型相同的匿名成员，这会导致名字冲突。同时，因为成员的名字是由其类型隐式地决定的，所以匿名成员也有可见性的规则约束。** 在上面的例子中，Point 和 Circle 匿名成员都是导出的。即使它们不导出（比如改成小写字母开头的 point 和 circle），我们依然可以用简短形式访问匿名成员嵌套的成员
+
+**但是在包外部，因为 circle 和 point 没有导出，不能访问它们的成员，因此简短的匿名成员访问语法也是禁止的。**
+
+其实任何命名的类型都可以作为结构体的匿名成员。但是为什么要嵌入一个没有任何子成员类型的匿名成员类型呢？
+
+答案是匿名类型的方法集。**简短的点运算符语法可以用于选择匿名成员嵌套的成员，也可以用于访问它们的方法。实际上，外层的结构体不仅仅是获得了匿名成员类型的所有成员，而且也获得了该类型导出的全部的方法。这个机制可以用于将一些有简单行为的对象组合成有复杂行为的对象。**
+
+> 组合是 Go 语言中面向对象编程的核心
+
+## 4.5. JSON
+
