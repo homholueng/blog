@@ -4,7 +4,9 @@ tags:
   - Go
 categories:
   - Go 语言圣经
+date: 2019-07-31 23:15:15
 ---
+
 
 ## 4.1. 数组
 
@@ -24,7 +26,7 @@ var r [3]int = [3]int{1, 2}
 fmt.Println(r[2]) // 0
 ```
 
-在数组字面值中，如果在数组的长度位置出现的是 “...” 省略号，则表示数组的长度是根据初始化值的个数来计算：
+在数组字面值中，如果在数组的长度位置出现的是 `...` 省略号，则表示数组的长度是根据初始化值的个数来计算：
 
 ```go
 q := [...]int{1, 2, 3}
@@ -69,7 +71,7 @@ Slice（切片）代表变长的序列，序列中每个元素都有相同的类
 months := [...]string{1: "January", /* ... */, 12: "December"}
 ```
 
-{% asset_img slice_on_array.png [切片示例] %}
+{% asset_img slice-on-array.png [切片示例] %}
 
 slice 的切片操作 `s[i:j]`，其中 `0 ≤ i≤ j≤ cap(s)`，用于创建一个新的 slice，引用 `s` 的从第 `i` 个元素开始到第 `j-1` 个元素的子序列。
 
@@ -457,3 +459,139 @@ fmt.Printf("%#v\n", w)
 
 ## 4.5. JSON
 
+Go 语言对于标准格式的编码和解码都有良好的支持，由标准库中的 `encoding/json`、`encoding/xml`、`encoding/asn1` 等包提供支持（译注：Protocol Buffers 的支持由 `github.com/golang/protobuf` 包提供），并且这类包都有着相似的 API 接口。
+
+考虑一个应用程序，该程序负责收集各种电影评论并提供反馈功能。它的 Movie 数据类型和一个典型的表示电影的值列表如下所示。
+
+```go
+type Movie struct {
+	Title string
+	Year int `json:released`
+	Color bool `json:"color,omitempty"`
+	Actors []string
+}
+
+func main() {
+	var movies = []Movie{
+		{Title: "Casablanca", Year: 1942, Color: false,
+			Actors: []string{"Humphrey Bogart", "Ingrid Bergman"}},
+		{Title: "Cool Hand Luke", Year: 1967, Color: true,
+			Actors: []string{"Paul Newman"}},
+		{Title: "Bullitt", Year: 1968, Color: true,
+			Actors: []string{"Steve McQueen", "Jacqueline Bisset"}},
+	}
+
+	data, err := json.MarshalIndent(movies, "", "    ")
+	if err != nil {
+		log.Fatalf("JSON marshaling failed: %s", err)
+	}
+	fmt.Printf("%s\n", data)
+}
+```
+ 
+ `json.MarshalIndent` 函数产生整齐缩进的输出：
+
+ ```json
+[
+    {
+        "Title": "Casablanca",
+        "Year": 1942,
+        "Actors": [
+            "Humphrey Bogart",
+            "Ingrid Bergman"
+        ]
+    },
+    {
+        "Title": "Cool Hand Luke",
+        "Year": 1967,
+        "color": true,
+        "Actors": [
+            "Paul Newman"
+        ]
+    },
+    {
+        "Title": "Bullitt",
+        "Year": 1968,
+        "color": true,
+        "Actors": [
+            "Steve McQueen",
+            "Jacqueline Bisset"
+        ]
+    }
+]
+ ```
+
+ 在编码时，默认使用 Go 语言结构体的成员名字作为 JSON 的对象（通过 reflect 反射技术），只有导出的结构体成员才会被编码。
+
+ 在上述的例子中，Year 名字的成员在编码后变成了 released，还有 Color 成员编码后变成了小写字母开头的 color。这是因为结构体成员 Tag 所导致的。一个结构体成员 Tag 是和在编译阶段关联到该成员的元信息字符串：
+
+```go
+Year  int  `json:"released"`
+Color bool `json:"color,omitempty"`
+```
+
+**结构体的成员 Tag 可以是任意的字符串面值，但是通常是一系列用空格分隔的 key:"value" 键值对序列；因为值中含有双引号字符，因此成员 Tag 一般用原生字符串面值的形式书写。**
+
+成员 Tag 中 json 对应值的第一部分用于指定 JSON 对象的名字，比如将 Go 语言中的 `TotalCount` 成员对应到 JSON 中的 `total_count` 对象。`Color` 成员的 Tag 还带了一个额外的 `omitempty` 选项，表示当 Go 语言结构体成员为空或零值时不生成该 JSON 对象
+
+编码的逆操作是解码，对应将 JSON 数据解码为 Go 语言的数据结构，Go 语言中一般叫 unmarshaling，通过 `json.Unmarshal` 函数完成。下面的代码将 JSON 格式的电影数据解码为一个结构体 slice，结构体中只有 Title 成员。
+
+```go
+var titles []struct{ Title string }
+if err := json.Unmarshal(data, &titles); err != nil {
+    log.Fatalf("JSON unmarshaling failed: %s", err)
+}
+fmt.Println(titles) // "[{Casablanca} {Cool Hand Luke} {Bullitt}]"
+```
+
+## 4.6. 文本和 HTML 模板
+
+简单的格式化，使用 Printf 是完全足够的。但是有时候会需要复杂的打印格式，这时候一般需要将格式化代码分离出来以便更安全地修改。这些功能是由 `text/template` 和 `html/template` 等模板包提供的，它们提供了一个将变量值填充到一个文本或 HTML 格式的模板的机制。
+
+一个模板是一个字符串或一个文件，里面包含了一个或多个由双花括号包含的 `{% raw %}{{action}}{% endraw %}` 对象。大部分的字符串只是按字面值打印，但是对于 actions 部分将触发其它的行为。**每个 actions 都包含了一个用模板语言书写的表达式，一个 action 虽然简短但是可以输出复杂的打印值，模板语言包含通过选择结构体的成员、调用函数或方法、表达式控制流 if-else 语句和 range 循环语句，还有其它实例化模板等诸多特性。**
+
+下面是一个简单的模板字符串：
+
+```go
+const templ = `{% raw %}{{.TotalCount}}{% endraw %} issues:
+{% raw %}{{range .Items}}{% endraw %}----------------------------------------
+Number: {% raw %}{{.Number}}{% endraw %}
+User:   {% raw %}{{.User.Login}}{% endraw %}
+Title:  {% raw %}{{.Title | printf "%.64s"}}{% endraw %}
+Age:    {% raw %}{{.CreatedAt | daysAgo}}{% endraw %} days
+{% raw %}{{end}}{% endraw %}`
+```
+
+这个模板先打印匹配到的 issue 总数，然后打印每个 issue 的编号、创建用户、标题还有存在的时间。**对于每一个 action，都有一个当前值的概念，对应点操作符，写作 `.`。当前值 `.` 最初被初始化为调用模板时的参数，在当前例子中对应 IssuesSearchResult 类型的变量。** 模板中 `{% raw %}{{.TotalCount}}{% endraw %}` 对应 action 将展开为结构体中 TotalCount 成员以默认的方式打印的值。模板中 `{% raw %}{{range .Items}}{% endraw %}` 和 `{% raw %}{{end}}{% endraw %}` 对应一个循环 action，因此它们之间的内容可能会被展开多次，循环每次迭代的当前值对应当前的 Items 元素的值。
+
+在一个 action 中，`|` 操作符表示将前一个表达式的结果作为后一个函数的输入，类似于 UNIX 中管道的概念。
+
+生成模板的输出需要两个处理步骤。第一步是要分析模板并转为内部表示，然后基于指定的输入执行模板。分析模板部分一般只需要执行一次。下面的代码创建并分析上面定义的模板 `templ`。
+
+```go
+report, err := template.New("report").
+    Funcs(template.FuncMap{"daysAgo": daysAgo}).
+    Parse(templ)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+注意方法调用链的顺序：`template.New` 先创建并返回一个模板；`Funcs` 方法将 `daysAgo` 等自定义函数注册到模板中，并返回模板；最后调用 `Parse` 函数分析模板。
+
+因为模板通常在编译时就测试好了，如果模板解析失败将是一个致命的错误。`template.Must` 辅助函数可以简化这个致命错误的处理：它接受一个模板和一个 error 类型的参数，检测 error 是否为 `nil`（如果不是 `nil` 则发出 panic 异常），然后返回传入的模板。
+
+```go
+var report = template.Must(template.New("issuelist").
+    Funcs(template.FuncMap{"daysAgo": daysAgo}).
+    Parse(templ))
+```
+
+一旦模板创建完成，我们就能根据输入源生成我们想要的结果：
+
+```go
+result, err := SearchIssues(os.Args[1:])
+if err := report.Execute(os.Stdout, result); err != nil {
+        log.Fatal(err)
+}
+```
