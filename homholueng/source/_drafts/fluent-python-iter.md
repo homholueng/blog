@@ -175,3 +175,146 @@ class Sentence:
         return
 ```
 
+只要 Python 函数的定义体中有 `yield` 关键字，该函数就是生成器函数。调用生成器函数时，会返回一个生成器对象。也就是说，生成器函数是生成器工厂。
+
+下面一个特别简单的函数说明生成器的行为：
+
+```python
+In [3]: def gen123():
+   ...:     yield 1
+   ...:     yield 2
+   ...:     yield 3
+   ...:
+
+In [4]: gen123
+Out[4]: <function __main__.gen123()>
+
+In [8]: gen123()
+Out[8]: <generator object gen123 at 0x10287ff10>
+
+In [10]: for i in gen123():
+    ...:     print(i)
+    ...:
+1
+2
+3
+
+In [11]: g = gen123()
+
+In [12]: next(g)
+Out[12]: 1
+
+In [13]: next(g)
+Out[13]: 2
+
+In [14]: next(g)
+Out[14]: 3
+
+In [15]: next(g)
+---------------------------------------------------------------------------
+StopIteration                             Traceback (most recent call last)
+<ipython-input-15-e734f8aca5ac> in <module>
+----> 1 next(g)
+
+StopIteration:
+```
+
+生成器函数会创建一个生成器对象，包装生成器函数的定义体。把生成器传给 next 函数时，生成器函数会向前，执行函数定义体中的下一个 `yield` 语句，返回产出的值，并在函数定义体的当前位置暂停。
+
+这一版 Sentence 类比前一版简短多了，但是还不够懒惰。如今，人们认为惰性是好的特质，至少在编程语言和 API 中是如此。惰性实现是指尽可能延后生成值。这样做能节省内存，而且或许还可以避免做无用的处理。
+
+## 14.5 Sentence 类第4版：惰性实现
+
+目前实现的几版 Sentence 类都不具有惰性，因为 `__init__` 方法在一开始就构建好了文本中的单词列表，然后将其绑定到 `self.words` 属性上。
+
+为了解决这个问题，我们可以使用 `re.finditer` 函数，`re.finditer` 函数是 `re.findall` 函数的惰性版本，返回的不是列表，而是一个生成器，按需生成 `re.MatchObject` 实例。
+
+```python
+
+import re
+import reprlib
+
+RE_WORD = re.compile('\w+')
+
+class Sentence:
+
+    def __init__(self, text):
+        self.text = text
+    
+    def __repr__(self):
+        return 'Sentence(%s)' % reprlib.repr(self.text)
+
+    def __iter__(self):
+        for match in RE_WORD.finditer(self.text):
+          yield match.group()
+```
+
+## 14.6 Sentence 类第5版：生成器表达式
+
+生成器表达式可以理解为列表推导的惰性版本：不会迫切地构建列表，而是返回一个生成器，按需惰性生成元素。也就是说，如果列表推导是制造列表的工厂，那么生成器表达式就是制造生成器的工厂。
+
+下面是列表推导和生成器表达式的对比：
+
+```python
+In [1]: def gen_AB():
+   ...:     print('start')
+   ...:     yield 'A'
+   ...:     print('continue')
+   ...:     yield 'B'
+   ...:     print('end.')
+   ...:
+
+In [2]: res1 = [x for x in gen_AB()]
+start
+continue
+end.
+
+In [4]: res1
+Out[4]: ['A', 'B']
+
+In [5]: res2 = (x for x in gen_AB())
+
+In [6]: res2
+Out[6]: <generator object <genexpr> at 0x1027dbca8>
+
+In [8]: for i in res2:
+   ...:     print(i)
+   ...:
+start
+A
+continue
+B
+end.
+```
+
+使用生成器表达式，我们能够进一步减少 Sentence 实现的代码：
+
+```python
+
+import re
+import reprlib
+
+RE_WORD = re.compile('\w+')
+
+class Sentence:
+
+    def __init__(self, text):
+        self.text = text
+    
+    def __repr__(self):
+        return 'Sentence(%s)' % reprlib.repr(self.text)
+
+    def __iter__(self):
+        return (match.group() for match in RE_WORD.finditer(self.text))
+```
+
+生成器表达式是语法糖：完全可以替换成生成器函数，不过有时使用生成器表达式更便利。
+
+## 14.7 何时使用生成器表达式
+
+生成器表达式是创建生成器的简洁句法，这样无需先定义函数再调用。不过，生成器函数灵活得多，可以使用多个语句实现复杂的逻辑，也可以作为协程使用。
+
+选择使用哪种句法很容易判断：如果生成器表达式要分成多行写，推荐定义生成器函数，以便提高可读性。此外，生成器函数有名称，因此可以重用。
+
+## 14.9 标准库中的生成器函数
+
