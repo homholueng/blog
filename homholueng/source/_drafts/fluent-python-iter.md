@@ -6,7 +6,7 @@ categories:
   - Fluent Python
 ---
 
-## 14.1　Sentence类第1版：单词序列
+## 14.1　Sentence 类第1版：单词序列
 
 我们要实现一个 Sentence 类，以此打开探索可迭代对象的旅程。我们向这个类的构造方法传入包含一些文本的字符串，然后可以逐个单词迭代。
 
@@ -99,4 +99,79 @@ class Iterator(Iterable):
 
 > `__subclasshook__(subclass)`必须定义为类方法。该方法检查 subclass 是否是该抽象基类的子类。该方法必须返回 `True`, `False` 或是 `NotImplemented`。如果返回 `True`，subclass 就会被认为是这个抽象基类的子类。如果返回 `False`，无论正常情况是否应该认为是其子类，统一视为不是。如果返回 `NotImplemented`，子类检查会按照正常机制继续执行。
 
+
+## 14.3 Sentence 类第2版：典型的迭代器
+
+在这一个版本中，我们根据《设计模式：可复用面向对象软件的基础》一书中给出的模型来实现典型的迭代器设计模式，但这并不符合 Python 的习惯做法。
+
+```python
+
+import re
+import reprlib
+
+RE_WORD = re.compile('\w+')
+
+class Sentence:
+
+    def __init__(self, text):
+        self.text = text
+        self.words = RE_WORD.findall(text)
+    
+    def __repr__(self):
+        return 'Sentence(%s)' % reprlib.repr(self.text)
+
+    def __iter__(self):
+        return SentenceIterator(self.words)
+
+class SentenceIterator:
+
+    def __init__(self, words):
+        self.words = words
+        self.index = 0
+    
+    def __next__(self):
+        try:
+            word = self.words[self.index]
+        except IndexError:
+            raise StopIteration()
+        self.index += 1
+        return word
+    
+    def __iter__(self):
+        return self
+```
+
+这一版的工作量很大（对于懒惰的 Python 程序员来说的确如此）。
+
+### 把 Sentence 变成迭代器：BAD IDEA ！
+
+构建可迭代的对象和迭代器时经常会出现错误，原因是混淆了二者。要知道，可迭代对象有个 `__iter__` 方法，每次都实例化一个新的迭代器；而迭代器要实现 `__next__` 方法，返回单个元素，此外还要实现 `__iter__` 方法，返回迭代器本身。
+
+**切忌将 Sentence 类实现为迭代器！因为可迭代对象必须能够返回多个独立的迭代器，而每个迭代器要能维护自身内部的状态！**
+
+## 14.4 Sentence 类第3版：生成器函数
+
+实现相同的功能，Python 习惯的方式是用生成器函数代替 SentenceIterator 类：
+
+```python
+
+import re
+import reprlib
+
+RE_WORD = re.compile('\w+')
+
+class Sentence:
+
+    def __init__(self, text):
+        self.text = text
+        self.words = RE_WORD.findall(text)
+    
+    def __repr__(self):
+        return 'Sentence(%s)' % reprlib.repr(self.text)
+
+    def __iter__(self):
+        for word in self.words:
+            yield word
+        return
+```
 
