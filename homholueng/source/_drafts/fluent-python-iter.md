@@ -318,3 +318,84 @@ class Sentence:
 
 ## 14.9 标准库中的生成器函数
 
+### 过滤
+
+第一组是用于过滤的生成器函数：从输入的可迭代对象中产出元素的子集，而且不修改元素本身。
+
+| 模块 | 函数 | 说明 |
+| ----| ---- |---- |
+|itertools|compress(it, selector_it)|并行处理两个可迭代对象；如果 selector_it 中的元素是真值，产出 it 中对应的元素|
+|itertools|dropwhile(predicate, it)|处理 it，跳过 predicate 的计算结果为真值的元素，然后产出剩下的各个元素（不再进一步检查）|
+|（内置）|filter|把 it 中的各个元素传给 predicate，如果 返回真值，那么产出对应的元素，如果 predicate 是 None，那么只产出真值元素|
+|itertools|filterfalse(predicate, it)|与 filter 函数的作用类似，不过 predicate 的逻辑是相反的：predicate 返回假值时产出对应的元素|
+|itertools|islice(it, stop) 或 islice(it, start, stop, step=1)|产出 it 的切片，作用类似于 `s[:stop]` 或 `s[start:stop:step]`，不过 it 可以是任何可迭代的对象，而且这个函数实现的是惰性操作|
+|itertools|takewhile(predicate, it)|predicate 返回真值时产出对应的元素，然后立即停止，不再继续检查|
+
+```python
+In [1]: import itertools
+
+In [2]: def vowel(c):
+   ...:     return c.lower() in 'aeiou'
+   ...:
+
+In [3]: list(filter(vowel, 'Aardvark'))
+Out[3]: ['A', 'a', 'a']
+
+In [4]: list(itertools.filterfalse(vowel, 'Aardvark'))
+Out[4]: ['r', 'd', 'v', 'r', 'k']
+
+In [5]: list(itertools.dropwhile(vowel, 'Aardvark'))
+Out[5]: ['r', 'd', 'v', 'a', 'r', 'k']
+
+In [6]: list(itertools.takewhile(vowel, 'Aardvark'))
+Out[6]: ['A', 'a']
+
+In [7]: list(itertools.compress('Aardvark', [1, 0, 1, 1, 0, 1]))
+Out[7]: ['A', 'r', 'd', 'a']
+
+In [8]: list(itertools.islice('Aardvark', 4))
+Out[8]: ['A', 'a', 'r', 'd']
+
+In [9]: list(itertools.islice('Aardvark', 4, 7))
+Out[9]: ['v', 'a', 'r']
+
+In [10]: list(itertools.islice('Aardvark', 1, 7, 2))
+Out[10]: ['a', 'd', 'a']
+```
+
+### 映射
+
+下一组是用于映射的生成器函数：在输入的单个可迭代对象（map 和 starmap 函数处理多个可迭代的对象）中的各个元素上做计算，然后返回结果。
+
+| 模块 | 函数 | 说明 |
+| ----| ---- |---- |
+|itertools|accumulate(it, [func])|产出累积的总和；如果提供了 func，那么把前两个元素传给它，然后把计算结果和下一个元素传给它，以此类推，最后产出结果|
+|（内置）|enumerate(iterable, start=0)|产出由两个元素组成的元组，结构是 (index, item) ，其中 index 从 start 开始计数，item 则从 iterable 中获取|
+|内置|map(func, it1, [it2, ..., itN])|把 it 中的各个元素传给func，产出结果；如果传入 N 个可迭代的对象，那么 func 必须能接受 N 个参数，而且要并行处理各个可迭代的对象|
+|itertools|starmap(func, it)|把 it 中的各个元素传给 func，产出结果；输入的可迭代对象应该产出可迭代的元素 iit，然后以 `func(*iit)` 这种形式调用 func|
+
+```python
+In [11]: sample = [5, 4, 2, 8, 7, 6, 3, 0, 9, 1]
+
+In [12]: import itertools
+
+In [13]: list(itertools.accumulate(sample))
+Out[13]: [5, 9, 11, 19, 26, 32, 35, 35, 44, 45]
+
+In [14]: list(itertools.accumulate(sample, min))
+Out[14]: [5, 4, 2, 2, 2, 2, 2, 0, 0, 0]
+
+In [15]: list(itertools.accumulate(sample, max))
+Out[15]: [5, 5, 5, 8, 8, 8, 8, 8, 9, 9]
+
+In [16]: import operator
+
+In [17]: list(itertools.accumulate(sample, operator.mul))
+Out[17]: [5, 20, 40, 320, 2240, 13440, 40320, 0, 0, 0]
+
+In [18]: list(itertools.starmap(operator.mul, enumerate('albatroz', 1)))
+Out[18]: ['a', 'll', 'bbb', 'aaaa', 'ttttt', 'rrrrrr', 'ooooooo', 'zzzzzzzz']
+```
+
+### 合并
+
