@@ -4,7 +4,9 @@ tags:
   - Python
 categories:
   - Fluent Python
+date: 2019-08-25 16:21:37
 ---
+
 
 ## 14.1　Sentence 类第1版：单词序列
 
@@ -399,3 +401,248 @@ Out[18]: ['a', 'll', 'bbb', 'aaaa', 'ttttt', 'rrrrrr', 'ooooooo', 'zzzzzzzz']
 
 ### 合并
 
+接下来这一组是用于合并的生成器函数，这些函数都从输入的多个可迭代对象中产出元素。
+
+| 模块 | 函数 | 说明 |
+| ----| ---- |---- |
+|itertools|chain(it1, ..., itN)|先产出 it1 中的所有元素，然后产出 it2 中的所有元素，以此类推，无缝连接在一起|
+|itertools|chain.from_iterable(it)|产出 it 生成的各个可迭代对象中的元素，一个接一个，无缝连接在一起；it 应该产出可迭代的元素，例如可迭代的对象列表|
+|itertools|product(it1, ..., itN, repeat=1)|计算笛卡儿积：从输入的各个可迭代对象中获取元素，合并成由 N 个元素组成的元组，与嵌套的 for 循环效果一样；repeat 指明重复处理多少次输入的可迭代对象|
+|（内置）|zip(it1, ..., itN)|并行从输入的各个可迭代对象中获取元素，产出由 N 个元素组成的元组，只要有一个可迭代的对象到头了，就默默地停止|
+|itertools|zip_longest(it1, ..., itN, fillvalue=None)|并行从输入的各个可迭代对象中获取元素，产出由 N 个元素组成的元组，等到最长的可迭代对象到头后才停止，空缺的值使用 fillvalue 填充|
+
+```python
+In [1]: import itertools
+
+In [2]: list(itertools.chain('ABC', range(2)))
+Out[2]: ['A', 'B', 'C', 0, 1]
+
+In [3]: list(itertools.chain(enumerate('ABC')))
+Out[3]: [(0, 'A'), (1, 'B'), (2, 'C')]
+
+In [4]: list(itertools.chain.from_iterable(enumerate('ABC')))
+Out[4]: [0, 'A', 1, 'B', 2, 'C']
+
+In [5]: list(zip('ABC', range(5)))
+Out[5]: [('A', 0), ('B', 1), ('C', 2)]
+
+In [6]: list(zip('ABC', range(5), [10, 20, 30, 40]))
+Out[6]: [('A', 0, 10), ('B', 1, 20), ('C', 2, 30)]
+
+In [8]: list(itertools.zip_longest('ABC', range(5)))
+Out[8]: [('A', 0), ('B', 1), ('C', 2), (None, 3), (None, 4)]
+
+In [9]: list(itertools.zip_longest('ABC', range(5), fillvalue='?'))
+Out[9]: [('A', 0), ('B', 1), ('C', 2), ('?', 3), ('?', 4)]
+
+In [10]: list(itertools.product('ABC', range(2)))
+Out[10]: [('A', 0), ('A', 1), ('B', 0), ('B', 1), ('C', 0), ('C', 1)]
+
+In [11]: list(itertools.product('ABC'))
+Out[11]: [('A',), ('B',), ('C',)]
+
+In [12]: list(itertools.product('ABC', repeat=2))
+Out[12]:
+[('A', 'A'),
+ ('A', 'B'),
+ ('A', 'C'),
+ ('B', 'A'),
+ ('B', 'B'),
+ ('B', 'C'),
+ ('C', 'A'),
+ ('C', 'B'),
+ ('C', 'C')]
+
+In [13]: list(itertools.product('ABC', range(2), repeat=2))
+Out[13]:
+[('A', 0, 'A', 0),
+ ('A', 0, 'A', 1),
+ ('A', 0, 'B', 0),
+ ('A', 0, 'B', 1),
+ ('A', 0, 'C', 0),
+ ('A', 0, 'C', 1),
+ ('A', 1, 'A', 0),
+ ('A', 1, 'A', 1),
+ ('A', 1, 'B', 0),
+ ('A', 1, 'B', 1),
+ ('A', 1, 'C', 0),
+ ('A', 1, 'C', 1),
+ ('B', 0, 'A', 0),
+ ('B', 0, 'A', 1),
+ ('B', 0, 'B', 0),
+ ('B', 0, 'B', 1),
+ ('B', 0, 'C', 0),
+ ('B', 0, 'C', 1),
+ ('B', 1, 'A', 0),
+ ('B', 1, 'A', 1),
+ ('B', 1, 'B', 0),
+ ('B', 1, 'B', 1),
+ ('B', 1, 'C', 0),
+ ('B', 1, 'C', 1),
+ ('C', 0, 'A', 0),
+ ('C', 0, 'A', 1),
+ ('C', 0, 'B', 0),
+ ('C', 0, 'B', 1),
+ ('C', 0, 'C', 0),
+ ('C', 0, 'C', 1),
+ ('C', 1, 'A', 0),
+ ('C', 1, 'A', 1),
+ ('C', 1, 'B', 0),
+ ('C', 1, 'B', 1),
+ ('C', 1, 'C', 0),
+ ('C', 1, 'C', 1)]
+```
+
+### 扩展
+
+有些生成器函数会从一个元素中产出多个值，扩展输入的可迭代对象。
+
+| 模块 | 函数 | 说明 |
+| ----| ---- |---- |
+|itertools|combinations(it, out_len)|把 it 产出的 out_len 个元素组合在一起，然后产出|
+|itertools|combinations_with_replacement(it, out_len)|把 it 产出的 out_len 个元素组合在一起，然后产出，包含相同元素的组合|
+|itertools|count(start=0, step=1)|从 start 开始不断产出数字，按 step 指定的步幅增加|
+|itertools|cycle(it)|从 it 中产出各个元素，存储各个元素的副本，然后按顺序重复不断地产出各个元素|
+|itertools|permutations(it, out_len=None)|把 out_len 个 it 产出的元素排列在一起，然后产出这些排列；out_len 的默认值等于 `len(list(it))`|
+|itertools|repeat(item, [times])|重复不断地产出指定的元素，除非提供 times，指定次数|
+
+```python
+In [1]: import itertools
+
+In [2]: list(itertools.combinations('ABC', 2))
+Out[2]: [('A', 'B'), ('A', 'C'), ('B', 'C')]
+
+In [3]: list(itertools.combinations_with_replacement('ABC', 2))
+Out[3]: [('A', 'A'), ('A', 'B'), ('A', 'C'), ('B', 'B'), ('B', 'C'), ('C', 'C')]
+
+In [4]: list(itertools.permutations('ABC', 2))
+Out[4]: [('A', 'B'), ('A', 'C'), ('B', 'A'), ('B', 'C'), ('C', 'A'), ('C', 'B')]
+```
+
+### 重排列
+
+| 模块 | 函数 | 说明 |
+| ----| ---- |---- |
+|itertools|groupby(it, key=None)|产出由两个元素组成的元素，形式为 (key, group) ，其中 key 是分组标准，group 是生成器，用于产出分组里的元素|
+|（内置）|reversed(seq)|从后向前，倒序产出 seq 中的元素；**seq 必须是序 列，或者是实现了 `__reversed__` 特殊方法的对象**|
+|itertools|tee(it, n=2)|产出一个由 n 个生成器组成的元组，每个生成器 用于单独产出输入的可迭代对象中的元素|
+
+```python
+In [1]: import itertools
+
+In [2]: list(itertools.combinations('ABC', 2))
+Out[2]: [('A', 'B'), ('A', 'C'), ('B', 'C')]
+
+In [3]: list(itertools.combinations_with_replacement('ABC', 2))
+Out[3]: [('A', 'A'), ('A', 'B'), ('A', 'C'), ('B', 'B'), ('B', 'C'), ('C', 'C')]
+
+In [4]: list(itertools.permutations('ABC', 2))
+Out[4]: [('A', 'B'), ('A', 'C'), ('B', 'A'), ('B', 'C'), ('C', 'A'), ('C', 'B')]
+
+In [5]: import itertools
+
+In [6]: list(itertools.groupby('LLLLAAGGG'))
+Out[6]:
+[('L', <itertools._grouper at 0x10eaaf7b8>),
+ ('A', <itertools._grouper at 0x10eaaf7f0>),
+ ('G', <itertools._grouper at 0x10eaaf8d0>)]
+
+In [7]: for char, group in itertools.groupby('LLLLAAGGG'):
+   ...:     print(char, '->', list(group))
+   ...:
+L -> ['L', 'L', 'L', 'L']
+A -> ['A', 'A']
+G -> ['G', 'G', 'G']
+
+In [8]: animals = ['duck', 'eagle', 'rat', 'giraffe', 'bear', 'bat', 'dolphin', 'shark', 'lion']
+
+In [9]: animals.sort(key=len)
+
+In [10]: animals
+Out[10]: ['rat', 'bat', 'duck', 'bear', 'lion', 'eagle', 'shark', 'giraffe', 'dolphin']
+
+In [11]: for length, group in itertools.groupby(animals, len):
+    ...:     print(length, '->', list(group))
+    ...:
+3 -> ['rat', 'bat']
+4 -> ['duck', 'bear', 'lion']
+5 -> ['eagle', 'shark']
+7 -> ['giraffe', 'dolphin']
+
+In [12]: for length, group in itertools.groupby(reversed(animals), len):
+    ...:     print(length, '->', list(group))
+    ...:
+7 -> ['dolphin', 'giraffe']
+5 -> ['shark', 'eagle']
+4 -> ['lion', 'bear', 'duck']
+3 -> ['bat', 'rat']
+
+In [15]: list(zip(*itertools.tee('ABC')))
+Out[15]: [('A', 'A'), ('B', 'B'), ('C', 'C')]
+
+In [16]: list(zip(*itertools.tee('ABC', 3)))
+Out[16]: [('A', 'A', 'A'), ('B', 'B', 'B'), ('C', 'C', 'C')]
+```
+
+## 14.10　Python 3.3中新出现的句法：yield from
+
+如果生成器函数需要产出另一个生成器生成的值，传统的解决方法是使用嵌套的 for 循环，例如下面自己实现的 chain 的例子：
+
+```python
+def chain(*iterables):
+  for it in iterables:
+    for i in it:
+      yield i
+```
+
+在 PEP380 中引入了一个新的句法：`yield from`，它能够替代我们内层的 for 循环：
+
+```python
+def chain(*iterables):
+  for it in iterables:
+    yield from it
+```
+
+`yield from` 不仅仅是语法糖，其还会创建通道，把内层生成器直接与外层生成器的客户端联系起来。把生成器当成协程使用时，这个通道特别重要，不仅能为客户端代码生成值，还能使用客户端代码提供的值。
+
+## 14.12　深入分析 iter 函数
+
+如前所述，在 Python 中迭代对象 x 时会调用 `iter(x)`。
+
+可是，iter 函数还有一个鲜为人知的用法：传入两个参数，使用常规的函数或任何可调用的对象创建迭代器。这样使用时，第一个参数必须是可调用的对象，用于不断调用（没有参数），产出各个值；第二个值是哨符，这是个标记值，当可调用的对象返回这个值时，触发迭代器抛出 StopIteration 异常，而不产出哨符。
+
+```python
+In [21]: def d6():
+    ...:     return randint(1, 6)
+    ...:
+
+In [22]:
+
+In [22]: def d6():
+    ...:     return randint(1, 6)
+    ...:
+
+In [23]: d6_iter = iter(d6, 1)
+
+In [24]: d6_iter
+Out[24]: <callable_iterator at 0x10ee55b70>
+
+In [25]: for roll in iter(d6, 1):
+    ...:     print(roll)
+    ...:
+4
+2
+5
+5
+6
+4
+5
+```
+
+内置函数 iter 的文档中有个实用的例子。这段代码逐行读取文件，直到遇到空行或者到达文件末尾为止：
+
+```python
+with open('mydata.txt') as fp:
+  for line in iter(fp.readline, '\n'):
+    process_line(line)
+```
