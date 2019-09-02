@@ -109,5 +109,344 @@ TypeError: can't send non-None value to a just-started generator
 
 最先调用 `next(my_coro)` 函数这一步通常称为“预激”（prime）协程 （即，让协程向前执行到第一个 yield 表达式，准备好作为活跃的协程使用）。
 
-## 16.3　示例：使用协程计算移动平均值
+## 16.4　预激协程的装饰器
+
+
+如果不预激，那么协程没什么用，为了简化协程的用法，有时会使用一个预激装饰器。
+
+```python
+from functools import wraps
+
+def coroutine(func):
+    @wraps(func)
+    def primer(*args, **kwargs):
+        gen = func(*args, **kwargs)
+        next(gen)
+        return gen
+    return primer
+
+In [2]: @coroutine
+   ...: def simple_coroutine():
+   ...:     print('-> coroutine started')
+   ...:     x = yield
+   ...:     print('-> coroutine received:', x)
+   ...:
+
+In [3]: gen =simple_coroutine()
+-> coroutine started
+
+In [4]: gen.send(42)
+-> coroutine received: 42
+---------------------------------------------------------------------------
+StopIteration                             Traceback (most recent call last)
+<ipython-input-4-72d0e54668c5> in <module>
+----> 1 gen.send(42)
+
+StopIteration:
+```
+
+
+## 16.5　终止协程和异常处理
+
+协程中未处理的异常会向上冒泡，传给 next 函数或 send 方法的调用方（即触发协程的对象）。
+
+这个特性允许我们发送某个哨符值，让协程退出。内置的 `None` 和 `Ellipsis` 等常量经常用作哨符值。`Ellipsis` 的优点是，数据流中不太常有这个值。
+
+从 Python 2.5 开始，客户代码可以在生成器对象上调用两个方法，显式地把异常发给协程。
+
+这两个方法是 throw 和 close：
+
+- `generator.throw(exc_type[, exc_value[, traceback]])`：致使生成器在暂停的 yield 表达式处抛出指定的异常。如果生成器处理了抛出的异常，代码会向前执行到下一个 yield 表达式，而产出的值会成为调用 `generator.throw` 方法得到的返回值。如果生成器没有处理抛出的异常，异常会向上冒泡，传到调用方的上下文中。
+- `generator.close()`：致使生成器在暂停的 yield 表达式处抛出 GeneratorExit 异常。 如果生成器没有处理这个异常，或者抛出了 StopIteration 异常（通常是指运行到结尾），调用方不会报错。如果收到 GeneratorExit 异常，生成器一定不能产出值，否则解释器会抛出 RuntimeError 异常。 生成器抛出的其他异常会向上冒泡，传给调用方。
+
+```python
+class DemoException(Exception):
+    pass
+
+def demo_exc_handling():
+    print('-> coroutine started')
+    while True:
+        try:
+            x = yield
+        except DemoException:
+            print('*** DemoException handled. Continuing...')
+        else:
+            print('-> coroutine received: {!r}'.format(x))
+    
+    raise RuntimeError('This line should never run.')
+
+In [2]: exc_coro = demo_exc_handling()
+
+In [3]: next(exc_coro)
+-> coroutine started
+
+In [4]: exc_coro.send(11)
+-> coroutine received: 11
+
+In [5]: exc_coro.send(22)
+-> coroutine received: 22
+
+In [6]: exc_coro.throw(DemoException())
+*** DemoException handled. Continuing...
+
+In [8]: inspect.getgeneratorstate(exc_coro)
+Out[8]: 'GEN_SUSPENDED'
+
+In [9]: exc_coro.throw(ZeroDivisionError())
+---------------------------------------------------------------------------
+ZeroDivisionError                         Traceback (most recent call last)
+<ipython-input-9-e03abf340dfc> in <module>
+----> 1 exc_coro.throw(ZeroDivisionError())
+
+<ipython-input-1-cc1425411a81> in demo_exc_handling()
+      6     while True:
+      7         try:
+----> 8             x = yield
+      9         except DemoException:
+     10             print('*** DemoException handled. Continuing...')
+
+ZeroDivisionError:
+
+In [11]: inspect.getgeneratorstate(exc_coro)
+Out[11]: 'GEN_CLOSED'
+
+In [12]: exc_coro = demo_exc_handling()
+
+In [13]: next(exc_coro)
+-> coroutine started
+
+In [14]: exc_coro.send(22)
+-> coroutine received: 22
+
+In [15]: exc_coro.close()
+
+In [16]: inspect.getgeneratorstate(exc_coro)
+Out[16]: 'GEN_CLOSED'
+```
+
+## 16.6　让协程返回值
+
+下面是 averager 协程的不同版本，这一版会返回结果：
+
+```python
+from collections import namedtuple
+
+Result = namedtuple('Result', 'count average')
+
+def averager():
+    total = 0.0
+    count = 0
+    average = None
+    while True:
+        term = yield
+        if term is None:
+            break
+        total += term
+        count += 1
+        average = total / count
+    return Result(count, average)
+
+In [2]: coro_avg = averager()
+
+In [3]: next(coro_avg)
+
+In [4]: coro_avg.send(10)
+
+In [5]: coro_avg.send(30)
+
+In [6]: coro_avg.send(35)
+
+In [7]: coro_avg.send(None)
+---------------------------------------------------------------------------
+StopIteration                             Traceback (most recent call last)
+<ipython-input-7-a9c80bbec98f> in <module>
+----> 1 coro_avg.send(None)
+
+StopIteration: Result(count=3, average=25.0)
+```
+
+发送 `None` 会终止循环，导致协程结束，返回结果。一如既往，生成器对象会抛出 StopIteration 异常。异常对象的 value 属性保存着返回的值。
+
+```python
+In [8]: coro_avg = averager()
+
+In [9]: next(coro_avg)
+
+In [10]: coro_avg.send(30)
+
+In [11]: coro_avg.send(10)
+
+In [12]: try:
+    ...:     coro_avg.send(None)
+    ...: except StopIteration as exc:
+    ...:     result = exc.value
+    ...:
+
+In [13]: result
+Out[13]: Result(count=2, average=20.0)
+```
+
+获取协程的返回值虽然要绕个圈子，但这是 PEP 380 定义的方式，当我们意识到这一点之后就说得通了：yield from 结构会在内部自动捕获 StopIteration 异常。这种处理方式与 for 循环处理 StopIteration 异常的方式一样：循环机制使用用户易于理解的方式处理异常。对 `yield from` 结构来说，解释器不仅会捕获 StopIteration 异常，还会把 value 属性的值变成 `yield from` 表达式的值。可惜，我们无法在控制台中使用交互的方式测试这种行为，因为在函数外部使用 `yield from`（以及 yield）会导致句法出错。
+
+
+## 16.7　使用yield from
+
+首先要知道，`yield from` 是全新的语言结构。它的作用比 yield 多很 多，因此人们认为继续使用那个关键字多少会引起误解。在其他语言中，类似的结构使用 await 关键字，这个名称好多了，因为它传达了至关重要的一点：在生成器 gen 中使用 `yield from subgen()` 时，subgen 会获得控制权，把产出的值传给 gen 的调用方，即调用方可以直接控制 subgen。与此同时，gen 会阻塞，等待 subgen 终止。
+
+`yield from` 的主要功能是打开双向通道，把最外层的调用方与最内层的子生成器连接起来，这样二者可以直接发送和产出值，还可以直接传入异常，而不用在位于中间的协程中添加大量处理异常的样板代码。有了这个结构，协程可以通过以前不可能的方式委托职责。
+
+若想使用 `yield from` 结构，就要大幅改动代码。为了说明需要改动的部分，PEP 380 使用了一些专门的术语：
+
+- 委派生成器：包含 `yield from <iterable>` 表达式的生成器函数。
+- 子生成器：从 `yield from` 表达式中 `<iterable>` 部分获取的生成器。
+- 调用方：指代调用**委派生成器**的客户端代码。
+
+下面的代码使用 `yield from` 计算平均值并输出统计报告：
+
+```python
+from collections import namedtuple
+
+Result = namedtuple('Result', 'count average')
+
+# 子生成器
+def averager():
+    total = 0.0
+    count = 0
+    average = None
+    while True:
+        term = yield
+        if term is None:
+            break
+        total += term
+        count += 1
+        average = total / count
+    return Result(count, average)
+
+# 委派生成器
+def grouper(results, key):
+    while True:
+        results[key] = yield from averager()
+
+# 客户端代码，即调用方
+def main(data):
+    results = {}
+    for key, values in data.items():
+        group = grouper(results, key)
+        next(group)
+        for value in values:
+            group.send(value)
+        group.send(None)
+    
+    print(results)
+
+data = {
+  'girls;kg': [40.9, 38.5, 44.3, 42.2, 45.2, 41.7, 44.5, 38.0, 40.6, 44.5], 
+  'girls;m': [1.6, 1.51, 1.4, 1.3, 1.41, 1.39, 1.33, 1.46, 1.45, 1.43], 
+  'boys;kg': [39.0, 40.8, 43.2, 40.8, 43.1, 38.6, 41.4, 40.6, 36.3], 
+  'boys;m': [1.38, 1.5, 1.32, 1.25, 1.37, 1.48, 1.25, 1.49, 1.46],
+}
+
+if __name__ == '__main__':
+    main(data)
+```
+
+在上述的例子中，grouper 发送的每个值都会经由 `yield from` 处理，通过管道传给 averager 实例。grouper 会在 `yield from` 表达式处暂停，等待 averager 实例处理客户端发来的值。averager 实例运行完毕后，返回的值绑定到 `results[key]` 上。while 循环会不断创建 averager 实例，处理更多的值。
+
+而在 main 中，我们把各个 value 传给 grouper。传入的值最终到达 averager 函数中 `term = yield` 那一行；grouper 永远不知道传入的值是什么。
+
+最后，把 None 传入 grouper，导致当前的 averager 实例终止，也让 grouper 继续运行，再创建一个 averager 实例，处理下一组值。
+
+整个过程如下：
+
+- 外层 for 循环每次迭代会新建一个 grouper 实例，赋值给 group 变量；group 是委派生成器。
+- 调用 `next(group)`，预激委派生成器 grouper，此时进入 `while True` 循环，调用子生成器 averager 后，在 `yield from` 表达式处暂停。
+- 内层 for 循环调用 `group.send(value)`，直接把值传给子生成器 averager。同时，当前的 grouper 实例（group）在 `yield from` 表达式处暂停。
+- 内层循环结束后，group 实例依旧在 `yield from` 表达式处暂停， 因此，grouper 函数定义体中为 `results[key]` 赋值的语句还没有执行。
+- 如果外层 for 循环的末尾没有 `group.send(None)`，那么 averager 子生成器永远不会终止，委派生成器 group 永远不会再次激活，因此永远不会为 `results[key]` 赋值。
+- 外层 for 循环重新迭代时会新建一个 grouper 实例，然后绑定到 group 变量上。前一个 grouper 实例（以及它创建的尚未终止的 averager 子生成器实例）被垃圾回收程序回收。
+
+main，grouper，averager 的关系就如下图所示：
+
+{% asset_img yield_from.png [yield from] %}
+
+
+## 16.8　yield from 的意义
+
+PEP 380 中对 `yield from` 行为的说明如下：
+
+- 子生成器产出的值都直接传给委派生成器的调用方（即客户端代码）。
+- 使用 `send()` 方法发给委派生成器的值都直接传给子生成器。如果 发送的值是 `None`，那么会调用子生成器的 `__next__()` 方法。如果发送的值不是 `None`，那么会调用子生成器的 `send()` 方法。如 果调用的方法抛出 StopIteration 异常，那么委派生成器恢复运行。任何其他异常都会向上冒泡，传给委派生成器。
+- 生成器退出时，生成器（或子生成器）中的 `return expr` 表达式会触发 `StopIteration(expr)` 异常抛出。
+- `yield from` 表达式的值是子生成器终止时传给 StopIteration 异常的第一个参数。
+- 传入委派生成器的异常，除了 GeneratorExit 之外都传给子生成器的 `throw()` 方法。如果调用 `throw()` 方法时抛出 StopIteration 异常，委派生成器恢复运行。StopIteration 之外的异常会向上冒泡，传给委派生成器。
+- 如果把 GeneratorExit 异常传入委派生成器，或者在委派生成器 上调用 `close()` 方法，那么在子生成器上调用 `close()` 方法，如果它有的话。如果调用 `close()` 方法导致异常抛出，那么异常会向上冒泡，传给委派生成器；否则，委派生成器抛出 GeneratorExit 异常。
+
+在不考虑在委派生成器上调用 throw 和 close 及子生成器不抛出异常的情况下，`RESULT = yield from EXPR` 等价于下列代码：
+
+```python
+_i = iter(EXPR) # 子生成器，因为需要处理可迭代对象，所以调用了 iter 方法，对生成器对象调用 iter 会返回生成器自身
+try:
+    _y = next(_i)  # 子生成器产出的值
+except StopIteration as _e:
+    _r = _e.value  # 结果
+else:
+    while 1:
+        _s = yield _y  # 客户端发送过来的值
+        try:
+            _y = _i.send(_s)
+        except StopIteration as _e:
+            _r = _e.value
+            break
+
+RESULT = _r
+```
+
+但是，现实情况要复杂一些，因为要处理客户对 `.throw(...)` 和 `.close()` 方法的调用，而这两个方法执行的操作必须传入子生成器。 此外，子生成器可能只是纯粹的迭代器，不支持 `.throw(...)` 和 `.close()` 方法，因此 `yield from` 结构的逻辑必须处理这种情况。。如果子生成器实现了这两个方法，而在子生成器内部，这两个方法都会触发异常抛出，这种情况也必须由 `yield from` 机制处理。调用方可能会无缘无故地让子生成器自己抛出异常，实现 `yield from` 结构时也必须处理这种情况。最后，为了优化，如果调用方调用 `next(...)` 函数或 `.send(None)` 方法，都要转交职责，在子生成器上调用 `next(...)` 函数；仅当调用方发送的值不是 `None` 时，才使用子生成器的 `.send(...)` 方法。
+
+为了方便对比，下面列出 PEP 380 中扩充 `yield from` 表达式的完整伪代码：
+
+```python
+_i = iter(EXPR)
+try:
+    _y = next(_i)
+except StopIteration as _e:
+    _r = _e.value
+else:
+    while 1:
+        try:
+            _s = yield _y
+        except GeneratorExit as _e:  # 这一部分用于关闭委派生成器和子生成器。因为子生成器可以是任 何可迭代的对象，所以可能没有 close 方法。
+            try:
+                _m = _i.close
+            except AttributeError:
+                pass
+            else:
+                _m()
+            raise _e
+        except BaseException as _e:  # 这一部分处理调用方通过 .throw(...) 方法传入的异常。同样，子生成器可以是迭代器，从而没有 throw 方法可调用——这种情况会导 致委派生成器抛出异常。
+            _x = sys.exc_info()
+            try:
+                _m = _i.throw
+            except AttributeError:
+                raise _e
+            else: # 如果子生成器有 throw 方法，调用它并传入调用方发来的异常。子生成器可能会处理传入的异常（然后继续循环）；可能抛出 StopIteration 异常（从中获取结果，赋值给 _r，循环结束）；还可能不处理，而是抛出相同的或不同的异常，向上冒泡，传给委派生成器。
+                try:
+                   _y = m(*_x)
+                except StopIteration as _e:
+                    _r = _e.value
+                    break
+        else:  # 如果产出值时没有异常……
+            try:
+                if _s is None:
+                    _y = next(_i)  # 如果调用方最后发送的值是 None，在子生成器上调用 next 函数， 否则调用 send 方法。
+                else:
+                    _y = _i.send(_s)
+            except StopIteration as _e:
+                _r = _e.value
+                break
+RESULT = _r     
+```
+
+在伪代码的顶部，有行代码（`_y = next(_i)`）揭示了一个重要的细节：要预激子生成器。这表明，用于自动预激的装饰器与 `yield from` 结构不兼容。
+
 
