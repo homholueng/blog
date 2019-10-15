@@ -26,3 +26,40 @@ tags:
 - 键必须是字符串。
 - 值必须是 pickle 模块能处理的对象。
 
+```python
+import shelve
+
+db = shelve.open(DB_NAME)
+db[key] = SomeObject()
+
+obj = db[key]
+```
+
+### 19.1.5 使用特性获取链接的记录
+
+#### 防止实例属性覆盖类属性
+
+在使用特性时，如果我们要使用对象的类属性，为了防止对象的实例属性覆盖掉我们对雷属性的访问，建议按照以下的方式访问类属性：
+
+```python
+class Obj:
+
+    @property
+    def attr(self):
+        self.__class__.some_attr
+```
+
+#### 使用特性覆盖类的实例属性
+
+我们可以使用特性覆盖我们实例中的某些属性，但是，当我们要在类中访问实例的属性时，就需要按照如下方式进行访问：
+
+```python
+class Obj:
+
+    @property
+    def attr(self):
+        self.__dict__['attr']
+```
+
+## 19.2 使用特性验证属性
+
