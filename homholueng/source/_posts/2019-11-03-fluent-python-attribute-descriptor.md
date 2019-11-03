@@ -4,7 +4,9 @@ tags:
   - Python
 categories:
   - Fluent Python
+date: 2019-11-03 20:37:52
 ---
+
 
 **描述符是对多个属性运用相同存取逻辑的一种方式，是实现了特定协议的类，这个协议包括 `__get__`、`__set__` 和 `__delete__` 方法。**
 
