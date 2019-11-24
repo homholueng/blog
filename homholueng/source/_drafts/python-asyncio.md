@@ -83,7 +83,7 @@ async def main():
 2. tasks：调用 `asyncio.create_task` 返回的 Task 对象，通常使用 Task 对象来同时调度多个协程
 3. futures：这是一个底层实现中使用的对象，其表示一个异步操作最终会产生的结果；一般来说，使用高层 API 时我们都不会接触到这种对象
 
-## Running Tasks Concurrently
+### Running Tasks Concurrently
 
 如果要同时执行多个协程，asyncio 提供了一个便捷函数 gather 供我们使用：`awaitable asyncio.gather(*aws, return_exceptions=False)`。其会按照 aws 中传入的协程的顺序来并发的执行他们，如果 aws 中传入的对象是 awaitable 的，那么 gather 就会将其作为一个 Task 对象进行调度。
 
@@ -167,7 +167,7 @@ asyncio.run(main())
       7 
 ```
 
-## Shielding From Cancellation
+### Shielding From Cancellation
 
 我们可以使用 `shield` 函数来防止一个协程被 `calcel()` 调用影响：
 
@@ -177,7 +177,7 @@ res = await shield(something())
 
 但是如果正在执行 `something` 的协程被取消了，虽然此时 `something` 本身没有被取消，但是这条 `await` 语句还是会抛出 `CancelledError`。
 
-## Timeouts
+### Timeouts
 
 `asyncio.wait_for(aw, timeout, *)` 等待 `aw` 协程在超时时间内完成，否则抛出 `TimeoutError` 异常：
 
@@ -197,7 +197,7 @@ async def main():
 asyncio.run(main())
 ```
 
-## Waiting Primitives
+### Waiting Primitives
 
 `asyncio.wait(aws, *, timeout=None, return_when=ALL_COMPLETED)` 会执行 `aws` 并阻塞到 `return_when` 参数中指定的条件满足位置。
 
@@ -211,7 +211,7 @@ done, pending = await asyncio.wait(aws)
 - `FIRST_EXCEPTION`：函数将在任意一个 future 抛出异常后返回，如果没有任何异常抛出，其等同于 `ALL_COMPLETED`。
 - `ALL_COMPLETED`：函数将在所有 future 完成或被取消后返回。
 
-## Scheduling From Other Threads
+### Scheduling From Other Threads
 
 `asyncio.run_coroutine_threadsafe(coro, loop)` 能够让我们在另一个线程中执行协程：
 
@@ -226,10 +226,166 @@ future = asyncio.run_coroutine_threadsafe(coro, loop)
 assert future.result(timeout) == 3
 ```
 
-## Introspection
+### Introspection
 
 - `asyncio.current_task(loop=None)`：返回当前正在执行的 Task 实例，如果当前没有任务在执行则返回 `None`
 - `asyncio.all_tasks(loop=None)`：返回 loop 中尚未执行完成的 Task 集合
 
 如果 `loop` 参数为 `None`，函数内部会使用 `get_running_loop()` 来获取当前运行循环。
 
+## Streams
+
+Streams 提供了高层可用 `async/await` 关键字操作网络连接的借口，下面是用 Streams 编写的 TCP 回显客户端和 TCP 回显服务器
+
+### Client
+
+```python
+import asyncio
+
+async def tcp_echo_client(message):
+    reader, writer = await asyncio.open_connection(
+        '127.0.0.1', 8888)
+
+    print(f'Send: {message!r}')
+    writer.write(message.encode())
+
+    data = await reader.read(100)
+    print(f'Received: {data.decode()!r}')
+
+    print('Close the connection')
+    writer.close()
+
+asyncio.run(tcp_echo_client('Hello World!'))
+```
+
+### Server
+
+```python
+import asyncio
+
+async def handle_echo(reader, writer):
+    data = await reader.read(100)
+    message = data.decode()
+    addr = writer.get_extra_info('peername')
+
+    print(f"Received {message!r} from {addr!r}")
+
+    print(f"Send: {message!r}")
+    writer.write(data)
+    await writer.drain()
+
+    print("Close the connection")
+    writer.close()
+
+async def main():
+    server = await asyncio.start_server(
+        handle_echo, '127.0.0.1', 8888)
+
+    addr = server.sockets[0].getsockname()
+    print(f'Serving on {addr}')
+
+    async with server:
+        await server.serve_forever()
+
+asyncio.run(main())
+```
+
+## Synchronization Primitives
+
+虽然并发程序设计很大程度上涉及了代码之间协作的模式，但是总有一些情况下我们还是要对代码的执行进行同步，因为运行循环的行为不是我们能够控制的，这就需要借助各种同步原语提供的能力了。
+
+### Lock
+
+互斥锁，使用方式如下：
+
+```python
+import asyncio
+
+
+async def lock_competitor(n, lock):
+    print(f"competitor{n} try to get lock")
+
+    async with lock:
+        print(f"competitor{n} get the lock")
+        print(f"competitor sleep for {n} seconds...")
+        await asyncio.sleep(n)
+        print(f"competitor{n} wake up!")
+        print(f"competitor{n} give up the lock")
+
+
+async def main():
+    lock = asyncio.Lock()
+    await asyncio.gather(*[lock_competitor(n, lock) for n in range(1, 5)])
+
+asyncio.run(main())
+```
+
+当然，也可以采用传统的模式来获取互斥锁，但还是推荐使用 `async with` 关键字：
+
+```python
+lock = asyncio.Lock()
+
+# ... later
+await lock.acquire()
+try:
+    # access shared state
+finally:
+    lock.release()
+```
+
+注意，互斥锁是公平的，这意味这先尝试获取锁的协程会在锁可用后先得到锁。
+
+### Event
+
+事件能够用于通知多个 asyncio 任务某件事情已经发生了：
+
+```python
+async def waiter(event):
+    print('waiting for it ...')
+    await event.wait()
+    print('... got it!')
+
+async def main():
+    # Create an Event object.
+    event = asyncio.Event()
+
+    # Spawn a Task to wait until 'event' is set.
+    waiter_task = asyncio.create_task(waiter(event))
+
+    # Sleep for 1 second and set the event.
+    await asyncio.sleep(1)
+    event.set()
+
+    # Wait until the waiter task is finished.
+    await waiter_task
+
+asyncio.run(main())
+```
+
+### Condition
+
+Condition 可以用于让多个任务等待某些事件的发生，一旦事件发生后这些任务会尝试去互斥的访问某些共享的资源。Condition 就像是 Lock 和 Event 的结合。但是，多个 Condition 对象能够绑定同一个锁，这就能够让对不同事件感兴趣却需要访问同一个共享资源的任务间进行同步操作。
+
+```python
+cond = asyncio.Condition()
+
+# ... later
+async with cond:
+    await cond.wait()
+```
+
+### Semaphore
+
+即传统的信号量，当内置的计数器等于 0 时，则当前执行的任务会让出调度权：
+
+```python
+sem = asyncio.Semaphore(10)
+
+# ... later
+async with sem:
+    # work with shared resource
+```
+
+### BoundedSemaphore
+
+特殊版本的 Semaphore，若调用 `release()` 后其内置计数器的值大于初始值，则会抛出 `ValueError`。
