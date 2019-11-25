@@ -1,12 +1,14 @@
 ---
 title: python asyncio High-level APIs
-tags: 
+tags:
   - Python
 categories:
   - Fluent Python
+date: 2019-11-25 23:24:50
 ---
 
-asyncio 是 Python 官方提供的用于编写并发程序的库，特别是在 Python 3.6 之后，官方通过添加 `async/await` 关键字来支持了原生的协程，这使得我们不需要再使用传统的生成器来编写协程，而在 Python 3.7 之后，官方对 asyncio 库进行了调整，提供了更为抽象的高层接口，使得这个库的易用程度大大提高，通过这些上层接口，我们能够：
+
+asyncio 是 Python 官方提供的用于编写并发程序的库，特别是在 Python 3.6 之后，官方通过添加 `async/await` 关键字来支持了原生的协程，这使得我们不需要再使用传统的生成器来编写协程，而在 Python 3.7 之后，官方对 [asyncio](https://docs.python.org/3.7/library/asyncio.html) 库进行了调整，提供了更为抽象的高层接口，使得这个库的易用程度大大提高，通过这些上层接口，我们能够：
 
 - 并发的执行 Python 协程，病能够很好的对其进行管理
 - 进行网络 IO 和进程间通信
@@ -389,3 +391,27 @@ async with sem:
 ### BoundedSemaphore
 
 特殊版本的 Semaphore，若调用 `release()` 后其内置计数器的值大于初始值，则会抛出 `ValueError`。
+
+## Subprocesses
+
+asyncio 还提供了 API 来让我们创建和管理子进程，下面是一个使用子进程来执行命令的例子：
+
+```python
+import asyncio
+
+async def run(cmd):
+    proc = await asyncio.create_subprocess_shell(
+        cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE)
+
+    stdout, stderr = await proc.communicate()
+
+    print(f'[{cmd!r} exited with {proc.returncode}]')
+    if stdout:
+        print(f'[stdout]\n{stdout.decode()}')
+    if stderr:
+        print(f'[stderr]\n{stderr.decode()}')
+
+asyncio.run(run('ls /zzz'))
+```
